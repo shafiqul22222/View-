@@ -14,6 +14,8 @@
             --primary-hover: #3a7bd5;
             --danger: #ff4b2b;
             --danger-hover: #ff416c;
+            --success: #11998e;
+            --success-hover: #38ef7d;
             --border-radius: 8px;
         }
 
@@ -83,16 +85,15 @@
             background: linear-gradient(to right, #00d2ff, #3a7bd5);
         }
 
-        .btn-start:hover {
-            opacity: 0.9;
-            transform: scale(1.05);
+        .btn-play {
+            background: linear-gradient(to right, var(--success), var(--success-hover));
         }
 
         .btn-stop {
             background: linear-gradient(to right, #ff416c, #ff4b2b);
         }
 
-        .btn-stop:hover {
+        button:hover {
             opacity: 0.9;
             transform: scale(1.05);
         }
@@ -109,7 +110,7 @@
             background: #000;
             border-radius: var(--border-radius);
             overflow: hidden;
-            aspect-ratio: 16 / 9; /* ভিডিওর জন্য পারফেক্ট রেশিও */
+            aspect-ratio: 16 / 9;
             border: 2px solid #444;
             position: relative;
         }
@@ -139,7 +140,7 @@
     <div class="control-panel">
         <div class="input-group">
             <label for="urlInput">ভিডিও বা ওয়েবসাইটের লিংক (URL)</label>
-            <input type="text" id="urlInput" placeholder="https://www.facebook.com/share/r/..." required>
+            <input type="text" id="urlInput" placeholder="https://www.youtube.com/watch?v=..." required>
         </div>
 
         <div class="input-group">
@@ -147,8 +148,9 @@
             <input type="number" id="countInput" min="1" max="100" value="4">
         </div>
 
-        <button class="btn-start" id="startBtn">Start (স্ক্রিন তৈরি করুন)</button>
-        <button class="btn-stop" id="stopBtn">Clear (সব মুছুন)</button>
+        <button class="btn-start" id="startBtn">১. স্ক্রিন তৈরি করুন</button>
+        <button class="btn-play" id="playAllBtn" style="display: none;">২. সব একসাথে চালু করুন</button>
+        <button class="btn-stop" id="stopBtn">মুছুন (Clear)</button>
     </div>
 
     <!-- Container where all screens will appear -->
@@ -158,33 +160,35 @@
 
     <script>
         const startBtn = document.getElementById('startBtn');
+        const playAllBtn = document.getElementById('playAllBtn');
         const stopBtn = document.getElementById('stopBtn');
         const urlInput = document.getElementById('urlInput');
         const countInput = document.getElementById('countInput');
         const container = document.getElementById('screensContainer');
 
-        // ইউটিউব এবং ফেসবুক লিংক হলে সেটিকে Embed লিংকে কনভার্ট করার ফাংশন
-        function getEmbedUrl(url) {
+        // ইউটিউব এবং ফেসবুক লিংক কনভার্ট করার ফাংশন (isAutoplay প্যারামিটারসহ)
+        function getEmbedUrl(url, isAutoplay = false) {
             let embedUrl = url;
             
-            // ইউটিউবের সাধারণ লিংক বা শর্ট লিংক চেক করা
+            // অটো-প্লে অন থাকলে মিউট করতে হবে (ব্রাউজার পলিসির জন্য), নাহলে সাধারণ লিংক
+            const ytParams = isAutoplay ? "?autoplay=1&mute=1&enablejsapi=1" : "?rel=0&enablejsapi=1";
+            const fbParams = isAutoplay ? "&autoplay=true&mute=true" : "&autoplay=false";
+            
             if (url.includes("youtube.com/watch?v=")) {
                 const videoId = url.split("v=")[1].split("&")[0];
-                embedUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1`;
+                embedUrl = `https://www.youtube.com/embed/${videoId}${ytParams}`;
             } else if (url.includes("youtu.be/")) {
                 const videoId = url.split("youtu.be/")[1].split("?")[0];
-                embedUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1`;
+                embedUrl = `https://www.youtube.com/embed/${videoId}${ytParams}`;
             } 
-            // ফেসবুক ভিডিও বা রিলস লিংক চেক করা
             else if (url.includes("facebook.com") || url.includes("fb.watch")) {
-                // ফেসবুকের ভিডিওগুলোর জন্য বিশেষ প্লাগইন লিংক তৈরি করতে হয় এবং autoplay=true যুক্ত করা হয়েছে
-                embedUrl = `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(url)}&show_text=false&width=auto&autoplay=true`;
+                embedUrl = `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(url)}&show_text=false&width=auto${fbParams}`;
             }
             
             return embedUrl;
         }
 
-        // Start Button Logic
+        // Start Button Logic (স্ক্রিন তৈরি করবে কিন্তু অটো-প্লে হবে না)
         startBtn.addEventListener('click', () => {
             const rawUrl = urlInput.value.trim();
             const count = parseInt(countInput.value, 10);
@@ -199,48 +203,62 @@
                 return;
             }
 
-            // আগের স্ক্রিনগুলো মুছে ফেলা (যদি থাকে)
             container.innerHTML = '';
+            
+            // প্রথমে অটো-প্লে ছাড়াই লিংক জেনারেট করা হবে
+            const finalUrl = getEmbedUrl(rawUrl, false);
 
-            // লিংকের ধরন অনুযায়ী সঠিক লিংক তৈরি
-            const finalUrl = getEmbedUrl(rawUrl);
-
-            // লুপ চালিয়ে যতগুলো বলা হয়েছে ততগুলো স্ক্রিন (iframe) তৈরি করা
             for (let i = 1; i <= count; i++) {
-                // Wrapper Div
                 const wrapper = document.createElement('div');
                 wrapper.className = 'screen-wrapper';
                 
-                // ফেসবুক রিলস সাধারণত লম্বালম্বি (9:16) হয়, তাই স্টাইল এডজাস্টমেন্ট
                 if(finalUrl.includes("facebook.com/plugins/video.php")) {
                     wrapper.style.aspectRatio = "auto";
                     wrapper.style.minHeight = "400px";
                 }
 
-                // Screen Number Badge
                 const badge = document.createElement('div');
                 badge.className = 'screen-number';
                 badge.innerText = `Screen ${i}`;
 
-                // Iframe (The mini browser/video player)
                 const iframe = document.createElement('iframe');
                 iframe.src = finalUrl;
-                // ফেসবুক ভিডিওর জন্য প্রয়োজনীয় পারমিশন (autoplay যুক্ত করা আছে)
                 iframe.allow = "autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share";
                 iframe.allowFullscreen = true;
+                // ভিউ কাউন্ট হওয়ার সম্ভাবনা বাড়াতে সঠিক Referrer Policy যুক্ত করা হলো
+                iframe.setAttribute("referrerpolicy", "strict-origin-when-cross-origin");
+                iframe.setAttribute("title", "Video Player");
                 iframe.style.border = "none";
                 iframe.style.overflow = "hidden";
 
-                // Append everything to container
                 wrapper.appendChild(badge);
                 wrapper.appendChild(iframe);
                 container.appendChild(wrapper);
             }
+            
+            // স্ক্রিন তৈরি হলে Play All বাটনটি দৃশ্যমান হবে
+            playAllBtn.style.display = "inline-block";
+        });
+
+        // Play All Button Logic (সবগুলো ভিডিও একসাথে প্লে করবে)
+        playAllBtn.addEventListener('click', () => {
+            const rawUrl = urlInput.value.trim();
+            if (!rawUrl) return;
+
+            // অটো-প্লে প্যারামিটার যুক্ত লিংক জেনারেট করা
+            const autoPlayUrl = getEmbedUrl(rawUrl, true);
+            const iframes = document.querySelectorAll('.screen-wrapper iframe');
+            
+            // সকল iframe এর src আপডেট করে দিলে সবগুলো একসাথে প্লে হওয়া শুরু করবে
+            iframes.forEach(iframe => {
+                iframe.src = autoPlayUrl;
+            });
         });
 
         // Clear Button Logic
         stopBtn.addEventListener('click', () => {
-            container.innerHTML = ''; // সমস্ত স্ক্রিন মুছে ফেলবে
+            container.innerHTML = ''; 
+            playAllBtn.style.display = "none"; // Play All বাটন লুকিয়ে ফেলা
         });
     </script>
 </body>
